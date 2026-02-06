@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { IoSend, IoAdd, IoAttach, IoClose, IoDocument, IoImage, IoMusicalNote, IoDocumentText } from "react-icons/io5";
+import { IoSend, IoAttach, IoClose, IoDocument, IoImage, IoMusicalNote, IoDocumentText } from "react-icons/io5";
 import CONFIG from "../config";
 import { getMarketIntelligence } from "../api/marketIntelligence";
 import MarketIntelligence from "./MarketIntelligence";
@@ -12,13 +12,11 @@ function ChatBot() {
   const [loading, setLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [isReportMode, setIsReportMode] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
-  const menuRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,28 +177,11 @@ function ChatBot() {
     scrollToBottom();
   }, [messages]);
 
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (menuRef.current && !menuRef.current.contains(event.target)) {
-        setShowMenu(false);
-      }
-    };
-
-    if (showMenu) {
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-      };
-    }
-  }, [showMenu]);
-
   const onNewChat = () => {
     setSessionId(null);
     setMessages([]);
     setPrompt("");
     setIsReportMode(false);
-    setShowMenu(false);
     setCompanyName("");
     setAttachedFiles([]);
   };
@@ -209,7 +190,6 @@ function ChatBot() {
     setLoading(true);
     setSessionId(id);
     setIsReportMode(false);
-    setShowMenu(false);
     setAttachedFiles([]);
     try {
       const response = await fetch(`${CONFIG.API_BASE_URL}/sessions/${id}`, {
@@ -520,7 +500,6 @@ function ChatBot() {
     if (isModeReport) {
       setCompanyName("");
       setIsReportMode(false);
-      setShowMenu(false);
     } else {
       setPrompt("");
     }
@@ -670,6 +649,97 @@ function ChatBot() {
 
   const isDisabled = (isReportMode ? companyName.trim() === "" : prompt.trim() === "") && attachedFiles.length === 0 || loading || uploadingFiles;
 
+  // Handler for generating report from the dedicated input
+  const handleGenerateReport = async (e) => {
+    if (e) e.preventDefault();
+    const tickerToSend = companyName.trim();
+    if (!tickerToSend || loading || uploadingFiles) return;
+
+    // Upload files first if any
+    let uploadedFileInfo = [];
+    if (attachedFiles.length > 0) {
+      uploadedFileInfo = await uploadAllFiles();
+      if (uploadedFileInfo.length === 0 && !tickerToSend.trim()) {
+        return; // Don't send if files failed and no message
+      }
+    }
+
+    const userMessage = {
+      role: "user",
+      content: `Generate research report for ${tickerToSend}`,
+      attachments: uploadedFileInfo.length > 0 ? uploadedFileInfo.map(f => ({
+        filename: f.filename,
+        url: f.uploadUrl,
+        type: f.file.type
+      })) : []
+    };
+    setMessages((prev) => [...prev, userMessage]);
+
+    // Clear attachments and company name after sending
+    setAttachedFiles([]);
+    setCompanyName("");
+    setIsReportMode(false);
+
+    setLoading(true);
+
+    // Add thinking/generating message for report flow
+    const thinkingMessage = { role: "assistant", content: "Thinking...", isThinking: true };
+    setMessages((prev) => [...prev, thinkingMessage]);
+
+    try {
+      const url = `${CONFIG.API_BASE_URL}/chat/create-report`;
+      
+      const body = { company_name: tickerToSend, session_id: sessionId };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+
+      // Check if response is ok before parsing
+      if (!response.ok) {
+        let errorMessage = "Something went wrong. Please try again.";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.error || errorData.message || errorMessage;
+        } catch (parseError) {
+          errorMessage = response.statusText || errorMessage;
+        }
+        // Remove thinking message and add error
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: `Error: ${errorMessage}` }]));
+        return;
+      }
+
+      const data = await response.json();
+
+      // Handle report generation response
+      if (data.success && data.response) {
+        // Remove thinking message and add actual response
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: data.response }]));
+        if (data.session_id) setSessionId(data.session_id);
+      }
+      // Handle error response
+      else if (data.error) {
+        // Remove thinking message and add error
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: `Error: ${data.error}` }]));
+      } else {
+        // Remove thinking message and add error
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: "Unexpected response format." }]));
+      }
+    } catch (err) {
+      console.error("Chat error:", err);
+      const errorMessage = err.message || "Something went wrong. Please check your connection.";
+      // Remove thinking message and add error
+      setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: `Error: ${errorMessage}` }]));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="flex flex-1 h-full bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       {/* Main Chat Area */}
@@ -794,6 +864,46 @@ function ChatBot() {
           </div>
         )}
 
+        {/* Generate Report Section */}
+        <div className="px-4 sm:px-6 pb-3">
+          <form className="mx-auto max-w-4xl" onSubmit={handleGenerateReport}>
+            <div className="flex items-center gap-2 rounded-xl bg-[var(--card-bg)] px-3 sm:px-4 py-2.5 border border-[var(--border)]">
+              <IoDocumentText className="w-5 h-5 text-[var(--accent)] flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Enter Ticker to generate equity report"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                className="
+                  flex-1 bg-transparent
+                  text-sm text-[var(--text)]
+                  placeholder-[var(--text-muted)]
+                  outline-none
+                "
+              />
+              <button
+                type="submit"
+                disabled={companyName.trim() === "" || loading || uploadingFiles}
+                className="
+                  px-4 py-2 rounded-lg transition-all
+                  bg-[var(--accent)] text-white text-sm font-bold
+                  hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed
+                  flex items-center gap-2
+                "
+              >
+                {loading && isReportMode ? (
+                  <>
+                    <Spinner size="sm" className="border-white/30 border-t-white" />
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  "Generate"
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+
         {/* Input Area */}
         <footer className="pb-4 sm:pb-8 px-4 sm:px-6">
           <form className="mx-auto max-w-4xl relative" onSubmit={sendMessage}>
@@ -808,37 +918,6 @@ function ChatBot() {
             />
 
             <div className="flex items-center gap-2 rounded-2xl bg-[var(--card-bg)] px-3 sm:px-4 py-2.5 sm:py-3 group relative">
-              {/* Menu Button with Dropdown */}
-              {!isReportMode && (
-                <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                    onClick={() => setShowMenu(!showMenu)}
-                    className="text-[var(--text-muted)] hover:text-[var(--text)] p-1 rounded-md hover:bg-[var(--hover)] transition-colors"
-                    title="Create new report"
-              >
-                <IoAdd className="w-5 h-5" />
-              </button>
-
-                  {/* Dropdown Menu */}
-                  {showMenu && (
-                    <div className="absolute bottom-full left-0 mb-2 w-48 bg-[var(--bg)] border border-[var(--border)] rounded-xl z-50 overflow-hidden animate-in fade-in slide-in-from-bottom-2 duration-200">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsReportMode(true);
-                          setShowMenu(false);
-                        }}
-                        className="w-full px-4 py-3 text-left text-sm text-[var(--text)] hover:bg-[var(--hover)] transition-colors flex items-center gap-2"
-                      >
-                        <IoDocumentText className="w-4 h-4" />
-                        <span>Equity Report</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -848,52 +927,18 @@ function ChatBot() {
                 <IoAttach className="w-5 h-5" />
               </button>
 
-              {isReportMode ? (
-                <div className="flex-1 flex items-center gap-2 bg-[var(--bg)] rounded-xl px-3 py-2 animate-in fade-in slide-in-from-left-2 duration-200">
-                  <input
-                    type="text"
-                    placeholder="Enter company name (e.g., ICICI Bank)..."
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    autoFocus
-                    className="
-                    flex-1 bg-transparent
-                    text-sm text-[var(--text)]
-                    placeholder-[var(--text-muted)]
-                    outline-none
-                  " />
-                  <button
-                    type="submit"
-                    disabled={companyName.trim() === "" || loading || uploadingFiles}
-                    className="
-                      px-4 py-2 rounded-xl transition-all
-                      bg-[var(--accent)] text-white text-xs font-bold
-                      hover:brightness-110 active:scale-95 disabled:opacity-50
-                    "
-                  >
-                    {uploadingFiles ? 'Uploading...' : 'Generate'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setIsReportMode(false); setCompanyName(""); setShowMenu(false); }}
-                    className="text-[var(--text-muted)] hover:text-[var(--text)] p-1"
-                  >
-                    <IoClose className="w-5 h-5" />
-                  </button>
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Message SageAlpha..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  className="
+              <input
+                type="text"
+                placeholder="Message SageAlpha..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                className="
                   flex-1 bg-transparent
                   text-sm text-[var(--text)]
                   placeholder-[var(--text-muted)]
                   outline-none
-                " />
-              )}
+                "
+              />
 
               <button
                 type="submit"

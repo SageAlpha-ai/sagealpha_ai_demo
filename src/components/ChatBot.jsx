@@ -5,6 +5,7 @@ import { getMarketIntelligence } from "../api/marketIntelligence";
 import MarketIntelligence from "./MarketIntelligence";
 import Spinner from "./Spinner";
 import { toast } from "sonner";
+import EmailModal from "./EmailModal";
 
 function ChatBot() {
   const [prompt, setPrompt] = useState("");
@@ -15,6 +16,8 @@ function ChatBot() {
   const [companyName, setCompanyName] = useState("");
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState(null);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -168,9 +171,9 @@ function ChatBot() {
 
   const handlePdfDownload = (reportId) => {
     if (!reportId) return;
-    const finalUrl = `${CONFIG.API_BASE_URL}/reports/download/${reportId}`;
-    console.log("[PDF Download] Opening:", finalUrl);
-    window.open(finalUrl, "_blank", "noopener,noreferrer");
+    // Open email modal instead of direct download
+    setSelectedReportId(reportId);
+    setEmailModalOpen(true);
   };
 
   useEffect(() => {
@@ -961,6 +964,16 @@ function ChatBot() {
           </form>
         </footer>
       </main>
+
+      {/* Email Modal */}
+      <EmailModal
+        isOpen={emailModalOpen}
+        onClose={() => {
+          setEmailModalOpen(false);
+          setSelectedReportId(null);
+        }}
+        reportId={selectedReportId}
+      />
     </div>
   );
 }

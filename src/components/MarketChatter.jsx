@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import CONFIG from "../config";
 import { IoSearch, IoSparkles, IoClose } from "react-icons/io5";
+import { getDemoHeaders } from "../utils/demoId";
 
 function MarketChatter() {
   const navigate = useNavigate();
@@ -9,6 +10,8 @@ function MarketChatter() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [data, setData] = useState(null);
+  const [usageCount, setUsageCount] = useState(0);
+  const [isUsageLimitReached, setIsUsageLimitReached] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,10 +27,12 @@ function MarketChatter() {
 
     try {
       // Call backend endpoint which proxies to Azure Market Chatter AI
+      const demoHeaders = getDemoHeaders();
       const response = await fetch(`${CONFIG.API_BASE_URL}/api/market-chatter`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...demoHeaders
         },
         credentials: "include",
         body: JSON.stringify({
@@ -39,6 +44,15 @@ function MarketChatter() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Handle usage limit error
+        if (errorData.code === "USAGE_LIMIT_REACHED") {
+          setIsUsageLimitReached(true);
+          setUsageCount(5); // Set to max to show limit reached
+          setError("You've reached the free usage limit. Upgrade to continue using SageAlpha services.");
+          return;
+        }
+        
         throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -53,6 +67,9 @@ function MarketChatter() {
         throw new Error("Invalid response structure: claims array missing");
       }
 
+      // Refetch usage status to get updated count from backend
+      fetchUsageStatus();
+      
       setData(result);
     } catch (err) {
       console.error("Error fetching market chatter:", err);
@@ -61,6 +78,42 @@ function MarketChatter() {
       setLoading(false);
     }
   };
+
+  // Fetch usage status function (reusable)
+  const fetchUsageStatus = async () => {
+    try {
+      const demoHeaders = getDemoHeaders();
+      const response = await fetch(`${CONFIG.API_BASE_URL}/usage/status`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...demoHeaders
+        },
+        credentials: "include"
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update usage count for market chatter
+        const marketUsage = data.market?.usageCount || 0;
+        setUsageCount(marketUsage);
+        
+        // Check if limit is reached
+        if (marketUsage >= 5) {
+          setIsUsageLimitReached(true);
+        } else {
+          setIsUsageLimitReached(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching usage status:", error);
+    }
+  };
+
+  // Fetch usage status on component mount
+  useEffect(() => {
+    fetchUsageStatus();
+  }, []);
 
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
@@ -124,12 +177,23 @@ function MarketChatter() {
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 placeholder="Search ticker or company (e.g. AAPL, NVIDIA)..."
-                className="w-full pl-9 pr-24 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all"
-                disabled={loading}
+                className="w-full pl-9 pr-32 py-2.5 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-sm text-[var(--text)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)] focus:border-[var(--accent)] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={loading || isUsageLimitReached}
               />
+              
+              {/* Usage Counter */}
+              <div className="absolute top-1 right-20 flex items-center">
+                <span className={`
+                  text-[10px] sm:text-xs font-medium
+                  ${usageCount >= 5 ? 'text-red-500' : usageCount >= 4 ? 'text-orange-500' : 'text-[var(--text-muted)]'}
+                `}>
+                  Uses: {usageCount} / 5
+                </span>
+              </div>
+              
               <button
                 type="submit"
-                disabled={loading || !companyName.trim()}
+                disabled={loading || !companyName.trim() || isUsageLimitReached}
                 className="absolute right-1.5 top-1.5 bottom-1.5 px-3 rounded-md bg-[var(--accent)] text-white text-xs font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
               >
                 {loading ? "..." : "Analyze"}
@@ -144,9 +208,23 @@ function MarketChatter() {
         <div className="max-w-7xl mx-auto space-y-6">
 
           {error && (
-            <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-600 flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-              <IoClose className="w-5 h-5 flex-shrink-0" />
-              <span className="text-sm font-medium">{error}</span>
+            <div className={`p-4 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
+              isUsageLimitReached 
+                ? 'bg-red-500/10 border-red-500/20' 
+                : 'bg-red-500/10 border-red-500/20'
+            }`}>
+              <div className="flex items-center gap-3 flex-1">
+                <IoClose className="w-5 h-5 flex-shrink-0 text-red-600" />
+                <span className="text-sm font-medium text-red-600">{error}</span>
+              </div>
+              {isUsageLimitReached && (
+                <button
+                  onClick={() => navigate("/plans")}
+                  className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+                >
+                  Upgrade
+                </button>
+              )}
             </div>
           )}
 

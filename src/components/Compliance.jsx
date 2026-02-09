@@ -3,7 +3,9 @@ import { IoSend, IoShieldCheckmark, IoDocumentText, IoBulb, IoCopyOutline, IoChe
 import { HiSparkles } from "react-icons/hi2";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useNavigate } from "react-router-dom";
 import CONFIG from "../config";
+import { getDemoHeaders } from "../utils/demoId";
 
 function Compliance() {
   const [messages, setMessages] = useState([]);
@@ -12,8 +14,11 @@ function Compliance() {
   const [expandedSources, setExpandedSources] = useState(new Set());
   const [expandedAnswers, setExpandedAnswers] = useState(new Set());
   const [copiedStates, setCopiedStates] = useState({});
+  const [usageCount, setUsageCount] = useState(0);
+  const [isUsageLimitReached, setIsUsageLimitReached] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const navigate = useNavigate();
 
   // Categorized suggested questions
   const suggestedQuestions = {
@@ -73,20 +78,53 @@ function Compliance() {
     setLoading(true);
 
     try {
+      const demoHeaders = getDemoHeaders();
       const response = await fetch(`${CONFIG.API_BASE_URL}/compliance/chat`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...demoHeaders
         },
         credentials: "include",
         body: JSON.stringify({ query }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to get response: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle usage limit error
+        if (errorData.code === "USAGE_LIMIT_REACHED") {
+          setIsUsageLimitReached(true);
+          setUsageCount(5); // Set to max to show limit reached
+          const errorMessage = {
+            role: "assistant",
+            content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+            isUsageLimit: true
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          return;
+        }
+        
+        throw new Error(errorData.message || errorData.error || `Failed to get response: ${response.statusText}`);
       }
 
       const data = await response.json();
+      
+      // Check for usage limit in response data
+      if (data.code === "USAGE_LIMIT_REACHED") {
+        setIsUsageLimitReached(true);
+        setUsageCount(5); // Set to max to show limit reached
+        const errorMessage = {
+          role: "assistant",
+          content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+          isUsageLimit: true
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        return;
+      }
+      
+      // Refetch usage status to get updated count from backend
+      fetchUsageStatus();
       
       let replyContent = data.reply || "Sorry, I couldn't process your request.";
       
@@ -632,9 +670,9 @@ function Compliance() {
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
                 placeholder="Ask about compliance, regulations, or SEBI requirements..."
-              disabled={loading}
+              disabled={loading || isUsageLimitReached}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey && !isUsageLimitReached) {
                     e.preventDefault();
                     handleSend(e);
                   }
@@ -657,10 +695,20 @@ function Compliance() {
               "
                 aria-label="Compliance question input"
             />
+            
+            {/* Usage Counter */}
+            <div className="absolute top-1 right-14 flex items-center">
+              <span className={`
+                text-[10px] sm:text-xs font-medium
+                ${usageCount >= 5 ? 'text-red-500' : usageCount >= 4 ? 'text-orange-500' : 'text-[var(--text-muted)]'}
+              `}>
+                Uses: {usageCount} / 5
+              </span>
+            </div>
             </div>
             <button
               type="submit"
-              disabled={!inputValue.trim() || loading}
+              disabled={!inputValue.trim() || loading || isUsageLimitReached}
               className="
                 h-11 w-11 sm:h-12 sm:w-12
                 rounded-full
@@ -685,6 +733,23 @@ function Compliance() {
               )}
             </button>
           </form>
+          
+          {/* Usage Limit Message */}
+          {isUsageLimitReached && (
+            <div className="mt-3">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <p className="text-sm text-red-600 font-medium flex-1">
+                  You've reached the free usage limit. Upgrade to continue using SageAlpha services.
+                </p>
+                <button
+                  onClick={() => navigate("/plans")}
+                  className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+                >
+                  Upgrade
+                </button>
+              </div>
+            </div>
+          )}
           
           {/* Disclaimer */}
           <p className="mt-3 text-[10px] text-[var(--text-muted)] text-center leading-relaxed">

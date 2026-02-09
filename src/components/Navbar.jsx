@@ -54,64 +54,7 @@ function Navbar() {
             </button>
           )}
 
-          {/* Compliance and Market Chatter Buttons - Only on ChatBot page */}
-          {location.pathname === "/chatbot" && (
-            <>
-              {/* Compliance Button */}
-              <button
-                onClick={() => navigate("/compliance")}
-                className="
-                  h-9 sm:h-10 px-3 sm:px-4 rounded-lg
-                  flex items-center gap-2
-                  bg-[var(--hover)]
-                  hover:opacity-80
-                  transition
-                  text-[var(--text)]
-                  text-sm font-medium
-                "
-                aria-label="Compliance"
-              >
-                <IoShieldCheckmark className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Compliance Ai</span>
-              </button>
-
-              {/* Market Chatter Button */}
-              <button
-                onClick={() => navigate("/market-chatter")}
-                className="
-                  h-9 sm:h-10 px-3 sm:px-4 rounded-lg
-                  flex items-center gap-2
-                  bg-[var(--hover)]
-                  hover:opacity-80
-                  transition
-                  text-[var(--text)]
-                  text-sm font-medium
-                "
-                aria-label="Market Chatter"
-              >
-                <IoSparkles className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Market Chatter</span>
-              </button>
-
-              {/* Defender AI Button */}
-              <button
-                onClick={() => navigate("/defender-ai")}
-                className="
-                  h-9 sm:h-10 px-3 sm:px-4 rounded-lg
-                  flex items-center gap-2
-                  bg-[var(--hover)]
-                  hover:opacity-80
-                  transition
-                  text-[var(--text)]
-                  text-sm font-medium
-                "
-                aria-label="Defender AI"
-              >
-                <IoShieldCheckmark className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Defender AI</span>
-              </button>
-            </>
-          )}
+          {/* AI Tool buttons removed from Navbar - now displayed in ChatBot component */}
 
           {/* Theme Toggle */}
           <button

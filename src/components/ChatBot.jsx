@@ -1,11 +1,39 @@
 import React, { useState, useEffect, useRef } from "react";
 import { IoSend, IoAttach, IoClose, IoDocument, IoImage, IoMusicalNote, IoDocumentText } from "react-icons/io5";
+import { IoShieldCheckmark, IoSparkles } from "react-icons/io5";
+import { useNavigate, useLocation } from "react-router-dom";
 import CONFIG from "../config";
 import { getMarketIntelligence } from "../api/marketIntelligence";
 import MarketIntelligence from "./MarketIntelligence";
 import Spinner from "./Spinner";
 import { toast } from "sonner";
 import EmailModal from "./EmailModal";
+import { getDemoHeaders } from "../utils/demoId";
+
+// AI Tools configuration
+const aiTools = [
+  {
+    id: "compliance",
+    name: "Compliance AI",
+    description: "Ask compliance-safe finance questions",
+    icon: IoShieldCheckmark,
+    path: "/compliance",
+  },
+  {
+    id: "market-chatter",
+    name: "Market Chatter AI",
+    description: "Track market sentiment & news trends",
+    icon: IoSparkles,
+    path: "/market-chatter"
+  },
+  {
+    id: "defender",
+    name: "Defender AI",
+    description: "Ask high-risk or sensitive finance questions",
+    icon: IoShieldCheckmark,
+    path: "/defender-ai"
+  }
+];
 
 function ChatBot() {
   const [prompt, setPrompt] = useState("");
@@ -18,8 +46,13 @@ function ChatBot() {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState(null);
+  const [selectedAITool, setSelectedAITool] = useState(null);
+  const [usageCount, setUsageCount] = useState(0);
+  const [isUsageLimitReached, setIsUsageLimitReached] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -179,6 +212,43 @@ function ChatBot() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Fetch usage status function (reusable)
+  const fetchUsageStatus = async () => {
+    try {
+      const demoHeaders = getDemoHeaders();
+      const response = await fetch(`${CONFIG.API_BASE_URL}/usage/status`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...demoHeaders
+        },
+        credentials: "include"
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        // Update usage count for chat (main chatbot)
+        const chatUsage = data.chat?.usageCount || 0;
+        setUsageCount(chatUsage);
+        
+        // Check if limit is reached
+        if (chatUsage >= 5) {
+          setIsUsageLimitReached(true);
+        } else {
+          setIsUsageLimitReached(false);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching usage status:", error);
+      // On error, don't update usage (keep current state)
+    }
+  };
+
+  // Fetch usage status on component mount
+  useEffect(() => {
+    fetchUsageStatus();
+  }, []); // Only run on mount
 
   const onNewChat = () => {
     setSessionId(null);
@@ -595,10 +665,12 @@ function ChatBot() {
         ? { company_name: textToSend, session_id: sessionId }
         : { message: messageWithAttachments, session_id: sessionId, top_k: 5 };
 
+      const demoHeaders = getDemoHeaders();
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...demoHeaders
         },
         credentials: "include",
         body: JSON.stringify(body),
@@ -607,9 +679,23 @@ function ChatBot() {
       // Check if response is ok before parsing
       if (!response.ok) {
         let errorMessage = "Something went wrong. Please try again.";
+        let errorCode = null;
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorCode = errorData.code;
+          errorMessage = errorData.message || errorData.error || errorMessage;
+          
+          // Handle usage limit reached
+          if (errorCode === "USAGE_LIMIT_REACHED") {
+            setIsUsageLimitReached(true);
+            setUsageCount(5); // Set to max to show limit reached
+            setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ 
+              role: "assistant", 
+              content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+              isUsageLimit: true
+            }]));
+            return;
+          }
         } catch (parseError) {
           errorMessage = response.statusText || errorMessage;
         }
@@ -620,17 +706,33 @@ function ChatBot() {
 
       const data = await response.json();
 
+      // Handle usage limit error in response data
+      if (data.code === "USAGE_LIMIT_REACHED") {
+        setIsUsageLimitReached(true);
+        setUsageCount(5); // Set to max to show limit reached
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ 
+          role: "assistant", 
+          content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+          isUsageLimit: true
+        }]));
+        return;
+      }
+
       // Handle report generation response
       if (isModeReport && data.success && data.response) {
         // Remove thinking message and add actual response
         setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: data.response }]));
         if (data.session_id) setSessionId(data.session_id);
+        // Refetch usage status to get updated count from backend
+        fetchUsageStatus();
       }
       // Handle regular chat response
       else if (data.response) {
         // Remove thinking message and add actual response
         setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: data.response }]));
         if (data.session_id) setSessionId(data.session_id);
+        // Refetch usage status to get updated count from backend
+        fetchUsageStatus();
       }
       // Handle error response
       else if (data.error) {
@@ -650,7 +752,7 @@ function ChatBot() {
     }
   };
 
-  const isDisabled = (isReportMode ? companyName.trim() === "" : prompt.trim() === "") && attachedFiles.length === 0 || loading || uploadingFiles;
+  const isDisabled = (isReportMode ? companyName.trim() === "" : prompt.trim() === "") && attachedFiles.length === 0 || loading || uploadingFiles || isUsageLimitReached;
 
   // Handler for generating report from the dedicated input
   const handleGenerateReport = async (e) => {
@@ -694,10 +796,12 @@ function ChatBot() {
       
       const body = { company_name: tickerToSend, session_id: sessionId };
 
+      const demoHeaders = getDemoHeaders();
       const response = await fetch(url, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
+          ...demoHeaders
         },
         credentials: "include",
         body: JSON.stringify(body),
@@ -706,9 +810,23 @@ function ChatBot() {
       // Check if response is ok before parsing
       if (!response.ok) {
         let errorMessage = "Something went wrong. Please try again.";
+        let errorCode = null;
         try {
           const errorData = await response.json();
-          errorMessage = errorData.error || errorData.message || errorMessage;
+          errorCode = errorData.code;
+          errorMessage = errorData.message || errorData.error || errorMessage;
+          
+          // Handle usage limit reached
+          if (errorCode === "USAGE_LIMIT_REACHED") {
+            setIsUsageLimitReached(true);
+            setUsageCount(5); // Set to max to show limit reached
+            setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ 
+              role: "assistant", 
+              content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+              isUsageLimit: true
+            }]));
+            return;
+          }
         } catch (parseError) {
           errorMessage = response.statusText || errorMessage;
         }
@@ -719,11 +837,25 @@ function ChatBot() {
 
       const data = await response.json();
 
+      // Handle usage limit error in response data
+      if (data.code === "USAGE_LIMIT_REACHED") {
+        setIsUsageLimitReached(true);
+        setUsageCount(5); // Set to max to show limit reached
+        setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ 
+          role: "assistant", 
+          content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+          isUsageLimit: true
+        }]));
+        return;
+      }
+
       // Handle report generation response
       if (data.success && data.response) {
         // Remove thinking message and add actual response
         setMessages((prev) => prev.filter(msg => !msg.isThinking).concat([{ role: "assistant", content: data.response }]));
         if (data.session_id) setSessionId(data.session_id);
+        // Refetch usage status to get updated count from backend
+        fetchUsageStatus();
       }
       // Handle error response
       else if (data.error) {
@@ -743,10 +875,82 @@ function ChatBot() {
     }
   };
 
+  // Determine selected tool based on current path
+  useEffect(() => {
+    const currentTool = aiTools.find(tool => tool.path === location.pathname);
+    setSelectedAITool(currentTool ? currentTool.id : null);
+  }, [location.pathname]);
+
+  const handleToolSelect = (tool) => {
+    setSelectedAITool(tool.id);
+    navigate(tool.path);
+  };
+
   return (
     <div className="flex flex-1 h-full bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       {/* Main Chat Area */}
       <main className="flex flex-1 flex-col w-full">
+        {/* AI Tool Selector Section */}
+        <section className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 border-b border-[var(--border)]">
+          <div className="mx-auto max-w-4xl">
+            <p className="text-xs sm:text-sm font-medium text-[var(--text-muted)] mb-3">
+              Explore SageAlpha AI assistants
+            </p>
+            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+              {aiTools.map((tool) => {
+                const Icon = tool.icon;
+                const isSelected = selectedAITool === tool.id;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => handleToolSelect(tool)}
+                    className={`
+                      flex-shrink-0 w-[280px] sm:w-[300px]
+                      rounded-xl p-4
+                      border-2 transition-all duration-200
+                      ${isSelected 
+                        ? 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-lg scale-[1.02]' 
+                        : 'border-[var(--border)] bg-[var(--card-bg)] hover:border-[var(--accent)]/50 hover:shadow-md'
+                      }
+                      text-left
+                      active:scale-[0.98]
+                    `}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className={`
+                        flex-shrink-0 w-10 h-10 rounded-lg
+                        flex items-center justify-center
+                        ${isSelected 
+                          ? 'bg-[var(--accent)] text-white' 
+                          : 'bg-[var(--hover)] text-[var(--text)]'
+                        }
+                        transition-colors
+                      `}>
+                        <Icon className="w-5 h-5" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-bold text-sm sm:text-base text-[var(--text)]">
+                            {tool.name}
+                          </h3>
+                          {tool.isRecommended && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/20 text-[var(--accent)] font-semibold">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
+                          {tool.description}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* Messages */}
         <section className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
           {messages.length === 0 ? (
@@ -870,23 +1074,37 @@ function ChatBot() {
         {/* Generate Report Section */}
         <div className="px-4 sm:px-6 pb-3">
           <form className="mx-auto max-w-4xl" onSubmit={handleGenerateReport}>
-            <div className="flex items-center gap-2 rounded-xl bg-[var(--card-bg)] px-3 sm:px-4 py-2.5 border border-[var(--border)]">
+            <div className="flex items-center gap-2 rounded-xl bg-[var(--card-bg)] px-3 sm:px-4 py-2.5 border border-[var(--border)] relative">
               <IoDocumentText className="w-5 h-5 text-[var(--accent)] flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Enter Ticker to generate equity report"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                disabled={isUsageLimitReached}
                 className="
                   flex-1 bg-transparent
                   text-sm text-[var(--text)]
                   placeholder-[var(--text-muted)]
                   outline-none
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
                 "
               />
+              
+              {/* Usage Counter */}
+              <div className="absolute top-1 right-20 flex items-center">
+                <span className={`
+                  text-[10px] sm:text-xs font-medium
+                  ${usageCount >= 5 ? 'text-red-500' : usageCount >= 4 ? 'text-orange-500' : 'text-[var(--text-muted)]'}
+                `}>
+                  Uses: {usageCount} / 5
+                </span>
+              </div>
+              
               <button
                 type="submit"
-                disabled={companyName.trim() === "" || loading || uploadingFiles}
+                disabled={companyName.trim() === "" || loading || uploadingFiles || isUsageLimitReached}
                 className="
                   px-4 py-2 rounded-lg transition-all
                   bg-[var(--accent)] text-white text-sm font-bold
@@ -924,7 +1142,8 @@ function ChatBot() {
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="text-[var(--text-muted)] hover:text-[var(--text)] p-1 rounded-md hover:bg-[var(--hover)] transition-colors"
+                disabled={isUsageLimitReached}
+                className="text-[var(--text-muted)] hover:text-[var(--text)] p-1 rounded-md hover:bg-[var(--hover)] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Attach files (Images, PDFs, Excel, Audio)"
               >
                 <IoAttach className="w-5 h-5" />
@@ -935,13 +1154,26 @@ function ChatBot() {
                 placeholder="Message SageAlpha..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
+                disabled={isUsageLimitReached}
                 className="
                   flex-1 bg-transparent
                   text-sm text-[var(--text)]
                   placeholder-[var(--text-muted)]
                   outline-none
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
                 "
               />
+
+              {/* Usage Counter */}
+              <div className="absolute top-1 right-12 flex items-center">
+                <span className={`
+                  text-[10px] sm:text-xs font-medium
+                  ${usageCount >= 5 ? 'text-red-500' : usageCount >= 4 ? 'text-orange-500' : 'text-[var(--text-muted)]'}
+                `}>
+                  Uses: {usageCount} / 5
+                </span>
+              </div>
 
               <button
                 type="submit"
@@ -958,6 +1190,24 @@ function ChatBot() {
                 )}
               </button>
             </div>
+            
+            {/* Usage Limit Message */}
+            {isUsageLimitReached && (
+              <div className="mt-3 mx-auto max-w-4xl">
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <p className="text-sm text-red-600 font-medium flex-1">
+                    You've reached the free usage limit. Upgrade to continue using SageAlpha services.
+                  </p>
+                  <button
+                    onClick={() => navigate("/plans")}
+                    className="px-4 py-2 rounded-lg bg-[var(--accent)] text-white text-sm font-semibold hover:opacity-90 transition-opacity whitespace-nowrap"
+                  >
+                    Upgrade
+                  </button>
+                </div>
+              </div>
+            )}
+            
             <p className="text-[10px] text-center text-[var(--text-muted)] mt-2">
               SageAlpha.ai may produce inaccurate information. Always verify important financial data.
             </p>

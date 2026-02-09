@@ -51,10 +51,33 @@ function DefenderAI() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to get response: ${response.statusText}`);
+        
+        // Handle usage limit error
+        if (errorData.code === "USAGE_LIMIT_REACHED") {
+          const errorMessage = {
+            role: "assistant",
+            content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+            isUsageLimit: true
+          };
+          setMessages((prev) => [...prev, errorMessage]);
+          return;
+        }
+        
+        throw new Error(errorData.error || errorData.message || `Failed to get response: ${response.statusText}`);
       }
 
       const data = await response.json();
+      
+      // Check for usage limit in response data
+      if (data.code === "USAGE_LIMIT_REACHED") {
+        const errorMessage = {
+          role: "assistant",
+          content: "You've reached the free usage limit. Upgrade to continue using SageAlpha services.",
+          isUsageLimit: true
+        };
+        setMessages((prev) => [...prev, errorMessage]);
+        return;
+      }
 
       const botMessage = {
         role: "assistant",

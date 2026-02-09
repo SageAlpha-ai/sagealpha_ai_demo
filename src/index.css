@@ -112,6 +112,16 @@ body {
   background: rgba(241, 245, 249, 0.2);
 }
 
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
 /* Mobile-specific fixes */
 @media (max-width: 640px) {
 

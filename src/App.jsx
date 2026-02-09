@@ -8,6 +8,7 @@ import Portfolio from "./components/Portfolio";
 import Subscribers from "./components/Subscribers";
 import AppLayout from "./Layouts/AppLayout";
 import UpgradePlan from "./components/UpgradePlan";
+import Plans from "./components/Plans";
 import Compliance from "./components/Compliance";
 import MarketChatter from "./components/MarketChatter";
 import DefenderAI from "./components/DefenderAI";
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="/portfolio" element={<Portfolio />} />
         <Route path="/subscribers" element={<Subscribers />} />
         <Route path="/upgrade-plan" element={<UpgradePlan />} />
+        <Route path="/plans" element={<Plans />} />
         <Route path="/compliance" element={<Compliance />} />
         <Route path="/market-chatter" element={<MarketChatter />} />
         <Route path="/defender-ai" element={<DefenderAI />} />

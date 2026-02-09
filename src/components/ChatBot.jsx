@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { IoSend, IoAttach, IoClose, IoDocument, IoImage, IoMusicalNote, IoDocumentText } from "react-icons/io5";
-import { IoShieldCheckmark, IoSparkles } from "react-icons/io5";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import CONFIG from "../config";
 import { getMarketIntelligence } from "../api/marketIntelligence";
 import MarketIntelligence from "./MarketIntelligence";
@@ -9,31 +8,6 @@ import Spinner from "./Spinner";
 import { toast } from "sonner";
 import EmailModal from "./EmailModal";
 import { getDemoHeaders } from "../utils/demoId";
-
-// AI Tools configuration
-const aiTools = [
-  {
-    id: "compliance",
-    name: "Compliance AI",
-    description: "Ask compliance-safe finance questions",
-    icon: IoShieldCheckmark,
-    path: "/compliance",
-  },
-  {
-    id: "market-chatter",
-    name: "Market Chatter AI",
-    description: "Track market sentiment & news trends",
-    icon: IoSparkles,
-    path: "/market-chatter"
-  },
-  {
-    id: "defender",
-    name: "Defender AI",
-    description: "Ask high-risk or sensitive finance questions",
-    icon: IoShieldCheckmark,
-    path: "/defender-ai"
-  }
-];
 
 function ChatBot() {
   const [prompt, setPrompt] = useState("");
@@ -46,13 +20,11 @@ function ChatBot() {
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [selectedReportId, setSelectedReportId] = useState(null);
-  const [selectedAITool, setSelectedAITool] = useState(null);
   const [usageCount, setUsageCount] = useState(0);
   const [isUsageLimitReached, setIsUsageLimitReached] = useState(false);
   const fileInputRef = useRef(null);
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
-  const location = useLocation();
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -875,95 +847,42 @@ function ChatBot() {
     }
   };
 
-  // Determine selected tool based on current path
-  useEffect(() => {
-    const currentTool = aiTools.find(tool => tool.path === location.pathname);
-    setSelectedAITool(currentTool ? currentTool.id : null);
-  }, [location.pathname]);
-
-  const handleToolSelect = (tool) => {
-    setSelectedAITool(tool.id);
-    navigate(tool.path);
-  };
+  // Note: AI tool selection is now handled by AIAssistantsPanel component in Navbar
 
   return (
     <div className="flex flex-1 h-full bg-[var(--bg)] text-[var(--text)] overflow-hidden">
       {/* Main Chat Area */}
       <main className="flex flex-1 flex-col w-full">
-        {/* AI Tool Selector Section */}
-        <section className="px-4 sm:px-6 pt-4 sm:pt-6 pb-2 border-b border-[var(--border)]">
-          <div className="mx-auto max-w-4xl">
-            <p className="text-xs sm:text-sm font-medium text-[var(--text-muted)] mb-3">
-              Explore SageAlpha AI assistants
-            </p>
-            <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-              {aiTools.map((tool) => {
-                const Icon = tool.icon;
-                const isSelected = selectedAITool === tool.id;
-                return (
-                  <button
-                    key={tool.id}
-                    onClick={() => handleToolSelect(tool)}
-                    className={`
-                      flex-shrink-0 w-[280px] sm:w-[300px]
-                      rounded-xl p-4
-                      border-2 transition-all duration-200
-                      ${isSelected 
-                        ? 'border-[var(--accent)] bg-[var(--accent)]/10 shadow-lg scale-[1.02]' 
-                        : 'border-[var(--border)] bg-[var(--card-bg)] hover:border-[var(--accent)]/50 hover:shadow-md'
-                      }
-                      text-left
-                      active:scale-[0.98]
-                    `}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className={`
-                        flex-shrink-0 w-10 h-10 rounded-lg
-                        flex items-center justify-center
-                        ${isSelected 
-                          ? 'bg-[var(--accent)] text-white' 
-                          : 'bg-[var(--hover)] text-[var(--text)]'
-                        }
-                        transition-colors
-                      `}>
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h3 className="font-bold text-sm sm:text-base text-[var(--text)]">
-                            {tool.name}
-                          </h3>
-                          {tool.isRecommended && (
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/20 text-[var(--accent)] font-semibold">
-                              Recommended
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs sm:text-sm text-[var(--text-muted)] leading-relaxed">
-                          {tool.description}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-
         {/* Messages */}
         <section className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 space-y-4 sm:space-y-6">
           {messages.length === 0 ? (
             /* Welcome Section */
             <div className="flex-1 flex flex-col items-center justify-center text-center space-y-4 sm:space-y-6 max-w-2xl mx-auto py-6 sm:py-12 px-4">
               <div className="space-y-2 sm:space-y-3">
-                <h2 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-[var(--text)]">
-                  Welcome to <span className="text-[var(--accent)]">SageAlpha</span>
-                </h2>
-                <p className="text-sm sm:text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
-                  Your AI-powered equity research analyst. Get deep insights into company financials, filings, and market trends in seconds.
-                </p>
-              </div>
+  <h2 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight text-[var(--text)]">
+    Welcome to <span className="text-[var(--accent)]">SageAlpha</span> Demo
+  </h2>
+
+  <p className="text-sm sm:text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
+    You’re exploring a demo version of SageAlpha AI with limited features enabled.
+    This preview lets you experience how our AI-powered equity research works in real time.
+  </p>
+
+  <p className="text-sm sm:text-base md:text-lg text-[var(--text-muted)] leading-relaxed">
+    To unlock the full SageAlpha experience — including advanced tools, deeper insights,
+    and unrestricted usage — visit{" "}
+    <a
+      href="https://sagealpha.ai"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-[var(--accent)] font-medium hover:underline"
+    >
+      sagealpha.ai
+    </a>
+    .
+  </p>
+</div>
+
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 w-full pt-4 sm:pt-8">
                 <button

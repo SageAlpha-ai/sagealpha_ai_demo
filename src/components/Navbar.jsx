@@ -1,14 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 import { useTheme } from "../context/ThemeContext";
 import { IoToggleSharp } from "react-icons/io5";
 import { IoToggleOutline } from "react-icons/io5";
-import { IoArrowBack, IoShieldCheckmark, IoSparkles } from "react-icons/io5";
+import { IoArrowBack, IoSparkles } from "react-icons/io5";
 import { useNavigate, useLocation } from "react-router-dom";
+import AIAssistantsPanel from "./AIAssistantsPanel";
 
 function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const location = useLocation();
+  const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
   // Only show back button on profile, portfolio, and subscribers pages
   const showBackButton = ["/profile", "/portfolio", "/subscribers", "/upgrade-plan", "/compliance", "/market-chatter", "/defender-ai"].includes(location.pathname);
@@ -54,7 +56,25 @@ function Navbar() {
             </button>
           )}
 
-          {/* AI Tool buttons removed from Navbar - now displayed in ChatBot component */}
+          {/* AI Assistants Button - Only on ChatBot page */}
+          {location.pathname === "/chatbot" && (
+            <button
+              onClick={() => setIsAIPanelOpen(true)}
+              className="
+                h-9 sm:h-10 px-3 sm:px-4 rounded-lg
+                flex items-center gap-2
+                bg-[var(--hover)]
+                hover:opacity-80
+                transition
+                text-[var(--text)]
+                text-xs sm:text-sm font-medium
+              "
+              aria-label="AI Assistants"
+            >
+              <IoSparkles className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span className="hidden sm:inline">AI Assistants</span>
+            </button>
+          )}
 
           {/* Theme Toggle */}
           <button
@@ -71,6 +91,12 @@ function Navbar() {
           </button>
         </div>
       </div>
+
+      {/* AI Assistants Panel */}
+      <AIAssistantsPanel 
+        isOpen={isAIPanelOpen} 
+        onClose={() => setIsAIPanelOpen(false)} 
+      />
     </nav>
   );
 }

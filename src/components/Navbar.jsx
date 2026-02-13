@@ -12,8 +12,11 @@ function Navbar() {
   const location = useLocation();
   const [isAIPanelOpen, setIsAIPanelOpen] = useState(false);
 
-  // Only show back button on profile, portfolio, and subscribers pages
-  const showBackButton = ["/profile", "/portfolio", "/subscribers", "/upgrade-plan", "/compliance", "/market-chatter", "/defender-ai"].includes(location.pathname);
+  // Check if we're on an assistant route
+  const isAssistantRoute = location.pathname.startsWith("/assistant/");
+
+  // Show back button on utility pages and specific assistant sub-pages
+  const showBackButton = ["/profile", "/portfolio", "/subscribers", "/upgrade-plan"].includes(location.pathname);
 
   const handleGoBack = () => {
     navigate(-1);
@@ -30,15 +33,15 @@ function Navbar() {
 
         {/* Logo */}
         <img
-          onClick={() => navigate('/chatbot')}
+          onClick={() => navigate('/assistant/sagealpha')}
           src="/logo/sagealpha-logo.png"
           alt="SageAlpha"
-          className="h-8 w-auto"
+          className="h-8 w-auto cursor-pointer"
         />
 
         {/* Right side buttons */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Back Button - only on profile, portfolio, and subscribers pages */}
+          {/* Back Button */}
           {showBackButton && (
             <button
               onClick={handleGoBack}
@@ -56,8 +59,8 @@ function Navbar() {
             </button>
           )}
 
-          {/* AI Assistants Button - Only on ChatBot page */}
-          {location.pathname === "/chatbot" && (
+          {/* AI Assistants Button — visible on all assistant routes */}
+         
             <button
               onClick={() => setIsAIPanelOpen(true)}
               className="
@@ -74,7 +77,7 @@ function Navbar() {
               <IoSparkles className="w-4 h-4 sm:w-5 sm:h-5" />
               <span className="hidden sm:inline">AI Assistants</span>
             </button>
-          )}
+        
 
           {/* Theme Toggle */}
           <button

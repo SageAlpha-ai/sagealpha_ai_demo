@@ -697,14 +697,14 @@ function Compliance() {
             />
             
             {/* Usage Counter */}
-            <div className="absolute top-1 right-14 flex items-center">
+            {/* <div className="absolute top-1 right-14 flex items-center">
               <span className={`
                 text-[10px] sm:text-xs font-medium
                 ${usageCount >= 5 ? 'text-red-500' : usageCount >= 4 ? 'text-orange-500' : 'text-[var(--text-muted)]'}
               `}>
                 Uses: {usageCount} / 5
               </span>
-            </div>
+            </div> */}
             </div>
             <button
               type="submit"

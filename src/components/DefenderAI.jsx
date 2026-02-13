@@ -369,7 +369,7 @@ function DefenderAI() {
                 }
               }}
               disabled={loading}
-              placeholder="Ask a risky or regulatory question..."
+              placeholder="Ask a question..."
               className="flex-1 px-4 py-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-[var(--text)] placeholder-[var(--text-muted)] outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             />
             <button

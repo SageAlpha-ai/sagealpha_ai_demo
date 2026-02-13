@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { IoClose, IoShieldCheckmark, IoSparkles, IoChatbubbleEllipses } from "react-icons/io5";
+import { IoClose } from "react-icons/io5";
 import { useNavigate, useLocation } from "react-router-dom";
 
 // AI Tools configuration
@@ -7,28 +7,24 @@ const aiTools = [
   {
     id: "sagealpha",
     name: "SageAlpha AI",
-    icon: IoChatbubbleEllipses,
     path: "/assistant/sagealpha",
     gradient: "from-emerald-500 to-teal-600",
   },
   {
     id: "compliance",
     name: "Compliance AI",
-    icon: IoShieldCheckmark,
     path: "/assistant/compliance",
     gradient: "from-blue-500 to-blue-600",
   },
   {
     id: "market-chatter",
     name: "Market Chatter AI",
-    icon: IoSparkles,
     path: "/assistant/market-chatter",
     gradient: "from-indigo-500 to-purple-600",
   },
   {
     id: "defender",
     name: "Defender AI",
-    icon: IoShieldCheckmark,
     path: "/assistant/defender",
     gradient: "from-slate-700 to-slate-900",
   }
@@ -111,49 +107,44 @@ function AIAssistantsPanel({ isOpen, onClose }) {
         </div>
 
         {/* AI Tools List */}
-        <div className="p-4 space-y-3 flex-shrink-0 overflow-y-auto">
-          {aiTools.map((tool) => {
-            const Icon = tool.icon;
+        <div className="flex-shrink-0 overflow-y-auto">
+          {aiTools.map((tool, index) => {
             const isSelected = selectedToolId === tool.id;
             
-            // Gradient classes for each assistant
-            let gradientClasses = "";
+            // Gradient text classes for each assistant
+            let gradientTextClass = "";
             if (tool.id === "sagealpha") {
-              gradientClasses = "bg-gradient-to-br from-emerald-500 to-teal-600";
+              gradientTextClass = "bg-gradient-to-r from-emerald-500 to-teal-600 bg-clip-text text-transparent";
             } else if (tool.id === "compliance") {
-              gradientClasses = "bg-gradient-to-br from-blue-500 to-blue-600";
+              gradientTextClass = "bg-gradient-to-r from-blue-500 to-blue-600 bg-clip-text text-transparent";
             } else if (tool.id === "market-chatter") {
-              gradientClasses = "bg-gradient-to-br from-indigo-500 to-purple-600";
+              gradientTextClass = "bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent";
             } else {
-              gradientClasses = "bg-gradient-to-br from-slate-700 to-slate-900";
+              gradientTextClass = "bg-gradient-to-r from-slate-600 to-slate-800 bg-clip-text text-transparent";
             }
             
             return (
-              <button
-                key={tool.id}
-                onClick={() => handleToolSelect(tool)}
-                className={`
-                  w-full p-4 rounded-xl transition-all duration-200
-                  text-left relative overflow-hidden
-                  ${gradientClasses}
-                  ${isSelected 
-                    ? 'ring-2 ring-[var(--accent)] ring-offset-2 ring-offset-[var(--card-bg)] shadow-lg opacity-100' 
-                    : 'opacity-90 hover:opacity-100'
-                  }
-                  hover:scale-[1.02] active:scale-[0.98]
-                `}
-              >
-                <div className="flex items-center gap-3 relative z-10">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-white/20 backdrop-blur-sm flex items-center justify-center text-white">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-bold text-sm text-white">
-                      {tool.name}
-                    </h3>
-                  </div>
-                </div>
-              </button>
+              <React.Fragment key={tool.id}>
+                <button
+                  onClick={() => handleToolSelect(tool)}
+                  className={`
+                    w-full px-4 py-3 text-left
+                    transition-all duration-200
+                    border-l-4
+                    ${isSelected 
+                      ? 'bg-[var(--accent)]/5 border-[var(--accent)]' 
+                      : 'bg-transparent border-transparent hover:bg-[var(--hover)]/50'
+                    }
+                  `}
+                >
+                  <span className={`font-medium text-sm ${gradientTextClass}`}>
+                    {tool.name}
+                  </span>
+                </button>
+                {index < aiTools.length - 1 && (
+                  <div className="border-t border-[var(--border)]" />
+                )}
+              </React.Fragment>
             );
           })}
         </div>
